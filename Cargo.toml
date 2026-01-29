@@ -1,0 +1,20 @@
+[package]
+name = "dioxus-typst"
+version = "0.1.0"
+edition = "2024"
+description = "Typst component for Dioxus"
+repository = "https://github.com/RunnersNum40/dioxus-typst"
+license = "MIT OR Apache-2.0"
+keywords = ["dioxus", "html", "typst"]
+categories = ["text-processing", "web-programming"]
+
+[dependencies]
+chrono = "0.4"
+dioxus = "0.7"
+typst = "0.14"
+typst-assets = { version = "0.14", features = ["fonts"], optional = true }
+typst-html = "0.14"
+
+[features]
+default = ["fonts"]
+fonts = ["typst-assets"]
