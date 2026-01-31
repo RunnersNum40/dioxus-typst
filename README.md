@@ -58,6 +58,23 @@ rsx! {
 }
 ```
 
+### With Packages
+
+```rust
+let options = CompileOptions::new()
+    .with_package(
+        PackageSpec::from_str("@preview/cetz:0.2.2").unwrap(),
+        package_files, // HashMap<String, Vec<u8>>
+    );
+
+rsx! {
+    Typst {
+        source: content,
+        options: options,
+    }
+}
+```
+
 ## Styling
 
 Typst outputs semantic HTML without CSS. Style with your own:
@@ -82,9 +99,10 @@ Typst outputs semantic HTML without CSS. Style with your own:
 
 ## Feature Flags
 
-| Feature | Default | Description                      |
-| ------- | ------- | -------------------------------- |
-| `fonts` | ✓       | Bundle fonts from `typst-assets` |
+| Feature             | Default | Description                                   |
+| ------------------- | ------- | --------------------------------------------- |
+| `fonts`             | ✓       | Bundle fonts from `typst-assets`              |
+| `download-packages` | ✕       | Automatically download missing Typst packages |
 
 ## Limitations
 
