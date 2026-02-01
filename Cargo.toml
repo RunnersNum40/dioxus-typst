@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 description = "Typst component for Dioxus"
 repository = "https://github.com/RunnersNum40/dioxus-typst"
-license = "MIT OR Apache-2.0"
+license = "Apache-2.0"
 keywords = ["dioxus", "html", "typst"]
 categories = ["text-processing", "web-programming"]
 
