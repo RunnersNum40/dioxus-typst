@@ -13,6 +13,14 @@ use typst::{
 };
 use typst_html::HtmlDocument;
 
+fn normalize_path(path: String) -> String {
+    if path.starts_with('/') {
+        path
+    } else {
+        format!("/{path}")
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct CompileOptions {
     pub files: HashMap<String, Vec<u8>>,
@@ -25,11 +33,15 @@ impl CompileOptions {
     }
 
     pub fn with_file(mut self, path: impl Into<String>, content: Vec<u8>) -> Self {
-        self.files.insert(path.into(), content);
+        self.files.insert(normalize_path(path.into()), content);
         self
     }
 
     pub fn with_package(mut self, spec: PackageSpec, files: HashMap<String, Vec<u8>>) -> Self {
+        let files = files
+            .into_iter()
+            .map(|(path, content)| (normalize_path(path), content))
+            .collect();
         self.packages.insert(spec, files);
         self
     }
@@ -364,4 +376,3 @@ pub fn Typst(
         },
     }
 }
-
