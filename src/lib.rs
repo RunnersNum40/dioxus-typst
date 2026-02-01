@@ -1,3 +1,39 @@
+//! A Dioxus component for rendering Typst documents as HTML.
+//!
+//! This crate provides a [`Typst`] component that compiles Typst markup to HTML
+//! at runtime, allowing you to embed rich typeset content in Dioxus applications.
+//!
+//! # Example
+//!
+//! ```rust,ignore
+//! use dioxus::prelude::*;
+//! use dioxus_typst::Typst;
+//!
+//! #[component]
+//! fn App() -> Element {
+//!     let content = r#"
+//! = Hello, Typst!
+//!
+//! Some *formatted* text with math: $E = m c^2$
+//! "#;
+//!
+//!     rsx! {
+//!         Typst { source: content.to_string() }
+//!     }
+//! }
+//! ```
+//!
+//! # Feature Flags
+//!
+//! - **`fonts`** (default): Bundles fonts from `typst-assets` for consistent rendering.
+//! - **`download-packages`**: Enables automatic downloading of Typst packages from
+//!   the package registry.
+//!
+//! # Limitations
+//!
+//! Typst's HTML export is experimental and may change between versions. Pin your
+//! `typst` dependency and test output carefully when upgrading.
+
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
@@ -13,6 +49,7 @@ use typst::{
 };
 use typst_html::HtmlDocument;
 
+/// Normalizes a path to ensure it starts with a leading slash.
 fn normalize_path(path: String) -> String {
     if path.starts_with('/') {
         path
@@ -21,22 +58,70 @@ fn normalize_path(path: String) -> String {
     }
 }
 
+/// Options for configuring Typst compilation.
+///
+/// Use this to provide additional files (images, bibliographies, data files) and
+/// pre-loaded packages to the Typst compiler.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use dioxus_typst::CompileOptions;
+///
+/// let options = CompileOptions::new()
+///     .with_file("/data.csv", csv_bytes)
+///     .with_file("/logo.png", image_bytes);
+/// ```
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct CompileOptions {
+    /// Files available to the Typst document, keyed by their virtual path.
     pub files: HashMap<String, Vec<u8>>,
+    /// Pre-loaded packages, keyed by their package specification.
     pub packages: HashMap<PackageSpec, HashMap<String, Vec<u8>>>,
 }
 
 impl CompileOptions {
+    /// Creates a new empty `CompileOptions`.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Adds a file to the compilation environment.
+    ///
+    /// The path will be normalized to start with `/`. Files added here can be
+    /// referenced in Typst source using their path (e.g., `#image("/logo.png")`).
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let options = CompileOptions::new()
+    ///     .with_file("/figure.png", png_bytes)
+    ///     .with_file("data.csv", csv_bytes); // Also normalized to "/data.csv"
+    /// ```
+    #[must_use]
     pub fn with_file(mut self, path: impl Into<String>, content: Vec<u8>) -> Self {
         self.files.insert(normalize_path(path.into()), content);
         self
     }
 
+    /// Adds a pre-loaded package to the compilation environment.
+    ///
+    /// Use this to provide package files without requiring network access. File
+    /// paths within the package will be normalized to start with `/`.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use typst::syntax::package::PackageSpec;
+    /// use std::str::FromStr;
+    ///
+    /// let options = CompileOptions::new()
+    ///     .with_package(
+    ///         PackageSpec::from_str("@preview/cetz:0.2.2").unwrap(),
+    ///         package_files,
+    ///     );
+    /// ```
+    #[must_use]
     pub fn with_package(mut self, spec: PackageSpec, files: HashMap<String, Vec<u8>>) -> Self {
         let files = files
             .into_iter()
@@ -47,9 +132,14 @@ impl CompileOptions {
     }
 }
 
+/// Errors that can occur during Typst compilation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CompileError {
+    /// An error occurred during Typst compilation or HTML generation.
+    ///
+    /// The string contains one or more error messages joined by semicolons.
     Typst(String),
+    /// An error occurred while loading a package.
     Package(String),
 }
 
@@ -178,6 +268,7 @@ mod downloader {
     }
 }
 
+/// The compilation world that provides all resources to the Typst compiler.
 struct CompileWorld {
     library: LazyHash<Library>,
     book: LazyHash<FontBook>,
@@ -190,6 +281,7 @@ struct CompileWorld {
 }
 
 impl CompileWorld {
+    /// Creates a new compilation world with the given source and options.
     fn new(source: &str, options: &CompileOptions) -> Self {
         let fonts = load_fonts();
         let book = FontBook::from_fonts(&fonts);
@@ -232,6 +324,7 @@ impl CompileWorld {
         }
     }
 
+    /// Configures whether automatic package downloads are allowed.
     #[cfg(feature = "download-packages")]
     #[allow(dead_code)]
     fn with_downloads(mut self, allow: bool) -> Self {
@@ -239,6 +332,7 @@ impl CompileWorld {
         self
     }
 
+    /// Retrieves a file from a package, downloading if necessary and allowed.
     fn get_package_file(&self, package: &PackageSpec, path: &str) -> FileResult<Bytes> {
         {
             let packages = self.packages.read().unwrap();
@@ -337,6 +431,7 @@ impl World for CompileWorld {
     }
 }
 
+/// Loads all available fonts.
 fn load_fonts() -> Vec<Font> {
     let mut fonts = Vec::new();
     #[cfg(feature = "fonts")]
@@ -348,6 +443,7 @@ fn load_fonts() -> Vec<Font> {
     fonts
 }
 
+/// Compiles Typst source to HTML.
 fn compile(source: &str, options: &CompileOptions) -> Result<String, CompileError> {
     let world = CompileWorld::new(source, options);
     let warned = typst::compile::<HtmlDocument>(&world);
@@ -361,6 +457,49 @@ fn compile(source: &str, options: &CompileOptions) -> Result<String, CompileErro
     })
 }
 
+/// A Dioxus component that renders Typst markup as HTML.
+///
+/// This component compiles the provided Typst source at runtime and renders the
+/// resulting HTML. Compilation errors are displayed inline.
+///
+/// # Props
+///
+/// - `source`: The Typst source code to compile.
+/// - `options`: Optional [`CompileOptions`] providing additional files and packages.
+/// - `class`: CSS class for the wrapper div (defaults to `"typst-content"`).
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use dioxus::prelude::*;
+/// use dioxus_typst::{Typst, CompileOptions};
+///
+/// #[component]
+/// fn Document() -> Element {
+///     let source = r#"
+/// = Introduction
+///
+/// This is a *Typst* document with inline math: $integral_0^1 x^2 dif x$
+/// "#;
+///
+///     rsx! {
+///         Typst {
+///             source: source.to_string(),
+///             class: "prose".to_string(),
+///         }
+///     }
+/// }
+/// ```
+///
+/// # Styling
+///
+/// The component outputs semantic HTML without styling. Apply CSS to the wrapper
+/// class to style headings, paragraphs, code blocks, and other elements.
+///
+/// # Errors
+///
+/// Compilation errors are rendered as a `<div class="typst-error">` containing
+/// the error message. Style this class to make errors visible during development.
 #[component]
 pub fn Typst(
     source: String,
@@ -376,3 +515,4 @@ pub fn Typst(
         },
     }
 }
+
