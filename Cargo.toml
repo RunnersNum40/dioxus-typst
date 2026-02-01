@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-typst"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "Typst component for Dioxus"
 repository = "https://github.com/RunnersNum40/dioxus-typst"
