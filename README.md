@@ -101,7 +101,6 @@ Typst outputs semantic HTML without CSS. Style with your own:
 
 | Feature             | Default | Description                                   |
 | ------------------- | ------- | --------------------------------------------- |
-| `fonts`             | ✓       | Bundle fonts from `typst-assets`              |
 | `download-packages` | ✕       | Automatically download missing Typst packages |
 
 ## Limitations

@@ -879,7 +879,6 @@ dependencies = [
  "flate2",
  "tar",
  "typst",
- "typst-assets",
  "typst-html",
  "ureq",
 ]

@@ -25,7 +25,6 @@
 //!
 //! # Feature Flags
 //!
-//! - **`fonts`** (default): Bundles fonts from `typst-assets` for consistent rendering.
 //! - **`download-packages`**: Enables automatic downloading of Typst packages from
 //!   the package registry.
 //!
@@ -433,14 +432,7 @@ impl World for CompileWorld {
 
 /// Loads all available fonts.
 fn load_fonts() -> Vec<Font> {
-    let mut fonts = Vec::new();
-    #[cfg(feature = "fonts")]
-    for data in typst_assets::fonts() {
-        for font in Font::iter(Bytes::new(data)) {
-            fonts.push(font);
-        }
-    }
-    fonts
+    Vec::new()
 }
 
 /// Compiles Typst source to HTML.
