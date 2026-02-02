@@ -872,7 +872,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-typst"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "chrono",
  "dioxus",
