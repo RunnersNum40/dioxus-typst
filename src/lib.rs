@@ -30,7 +30,7 @@ use dioxus::prelude::*;
 use typst::{
     Feature, Library, LibraryExt, World,
     diag::{FileError, FileResult, PackageError},
-    foundations::{Bytes, Datetime},
+    foundations::{Bytes, Datetime, Smart},
     syntax::{FileId, Source, VirtualPath, package::PackageSpec},
     text::{Font, FontBook},
     utils::LazyHash,
@@ -88,6 +88,8 @@ impl CompileOptions {
     /// let options = CompileOptions::new()
     ///     .with_file("figure.png", png_bytes)
     ///     .with_file("data.csv", csv_bytes);
+    /// # assert!(options.files.contains_key("/figure.png"));
+    /// # assert!(options.files.contains_key("/data.csv"));
     /// ```
     #[must_use]
     pub fn with_file(mut self, path: impl Into<String>, content: Vec<u8>) -> Self {
@@ -343,4 +345,84 @@ pub fn Typst(
             div { class: "typst-error", "Error compiling Typst: {e}" }
         },
     }
+}
+
+/// Metadata extracted from a Typst document.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DocumentMetadata {
+    pub title: Option<String>,
+    pub authors: Vec<String>,
+    pub description: Option<String>,
+    pub keywords: Vec<String>,
+    pub date: Option<chrono::NaiveDate>,
+}
+
+/// Compiles Typst source and extracts document metadata.
+///
+/// Still compiles the document, so errors may occur during this process
+///
+/// # Example:
+///
+/// ```rust
+/// use dioxus_typst::{extract_metadata, CompileOptions};
+///
+/// let source = r#"
+/// #set document(
+///     title: "Sample Document",
+///     author: "John Doe",
+///     description: "A brief description of the document.",
+///     keywords: ["typst", "rust", "dioxus"],
+///     date: datetime(year: 2026, month: 1, day: 1),
+/// )
+/// let metadata = extract_metadata(source, &CompileOptions::new()).unwrap();
+/// # assert_eq!(metadata.title.unwrap(), "Sample Document");
+/// # assert_eq!(metadata.authors, vec!["John Doe"]);
+/// # assert_eq!(metadata.description.unwrap(), "A brief description of the document.");
+/// # assert_eq!(metadata.keywords, vec!["typst", "rust", "dioxus"]);
+/// # assert_eq!(metadata.date.unwrap().to_string(), "2026-01-01");
+/// "#;
+/// ```
+pub fn extract_metadata(
+    source: &str,
+    options: &CompileOptions,
+) -> Result<DocumentMetadata, CompileError> {
+    let world = CompileWorld::new(source, options);
+    let warned = typst::compile::<HtmlDocument>(&world);
+    let document = warned.output.map_err(|errors| {
+        let messages: Vec<String> = errors.iter().map(|e| e.message.to_string()).collect();
+        CompileError::Typst(messages.join("; "))
+    })?;
+
+    let doc_info = &document.info;
+
+    let title = doc_info.title.as_ref().map(|t| t.to_string());
+
+    let authors = doc_info.author.iter().map(|a| a.to_string()).collect();
+
+    let description = doc_info.description.as_ref().map(|d| d.to_string());
+
+    let keywords = doc_info.keywords.iter().map(|k| k.to_string()).collect();
+
+    let date = match &doc_info.date {
+        Smart::Custom(Some(datetime)) => chrono::NaiveDate::from_ymd_opt(
+            datetime.year().unwrap_or(chrono::Local::now().year()),
+            datetime
+                .month()
+                .unwrap_or(chrono::Local::now().month() as u8)
+                .into(),
+            datetime
+                .day()
+                .unwrap_or(chrono::Local::now().day() as u8)
+                .into(),
+        ),
+        _ => None,
+    };
+
+    Ok(DocumentMetadata {
+        title,
+        authors,
+        description,
+        keywords,
+        date,
+    })
 }
