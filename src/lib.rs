@@ -5,7 +5,7 @@
 //!
 //! # Example
 //!
-//! ```rust,ignore
+//! ```rust
 //! use dioxus::prelude::*;
 //! use dioxus_typst::Typst;
 //!
@@ -22,19 +22,8 @@
 //!     }
 //! }
 //! ```
-//!
-//! # Feature Flags
-//!
-//! - **`download-packages`**: Enables automatic downloading of Typst packages from
-//!   the package registry.
-//!
-//! # Limitations
-//!
-//! Typst's HTML export is experimental and may change between versions. Pin your
-//! `typst` dependency and test output carefully when upgrading.
 
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
 
 use chrono::{Datelike, Timelike};
 use dioxus::prelude::*;
@@ -64,12 +53,12 @@ fn normalize_path(path: String) -> String {
 ///
 /// # Example
 ///
-/// ```rust,ignore
+/// ```rust
 /// use dioxus_typst::CompileOptions;
 ///
 /// let options = CompileOptions::new()
-///     .with_file("/data.csv", csv_bytes)
-///     .with_file("/logo.png", image_bytes);
+///     .with_file("data.csv", csv_bytes)
+///     .with_file("logo.png", image_bytes);
 /// ```
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct CompileOptions {
@@ -87,15 +76,12 @@ impl CompileOptions {
 
     /// Adds a file to the compilation environment.
     ///
-    /// The path will be normalized to start with `/`. Files added here can be
-    /// referenced in Typst source using their path (e.g., `#image("/logo.png")`).
-    ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust
     /// let options = CompileOptions::new()
-    ///     .with_file("/figure.png", png_bytes)
-    ///     .with_file("data.csv", csv_bytes); // Also normalized to "/data.csv"
+    ///     .with_file("figure.png", png_bytes)
+    ///     .with_file("data.csv", csv_bytes);
     /// ```
     #[must_use]
     pub fn with_file(mut self, path: impl Into<String>, content: Vec<u8>) -> Self {
@@ -105,12 +91,9 @@ impl CompileOptions {
 
     /// Adds a pre-loaded package to the compilation environment.
     ///
-    /// Use this to provide package files without requiring network access. File
-    /// paths within the package will be normalized to start with `/`.
-    ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust
     /// use typst::syntax::package::PackageSpec;
     /// use std::str::FromStr;
     ///
@@ -138,134 +121,17 @@ pub enum CompileError {
     ///
     /// The string contains one or more error messages joined by semicolons.
     Typst(String),
-    /// An error occurred while loading a package.
-    Package(String),
 }
 
 impl std::fmt::Display for CompileError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             CompileError::Typst(msg) => write!(f, "Typst compilation error: {msg}"),
-            CompileError::Package(msg) => write!(f, "Package error: {msg}"),
         }
     }
 }
 
 impl std::error::Error for CompileError {}
-
-#[cfg(feature = "download-packages")]
-mod downloader {
-    use super::*;
-    use flate2::read::GzDecoder;
-    use std::io::Read;
-    use std::path::PathBuf;
-    use tar::Archive;
-    use typst::diag::eco_format;
-
-    fn cache_dir() -> Option<PathBuf> {
-        dirs::cache_dir().map(|p| p.join("typst").join("packages"))
-    }
-
-    fn package_dir(spec: &PackageSpec) -> Option<PathBuf> {
-        cache_dir().map(|p| {
-            p.join(spec.namespace.as_str())
-                .join(spec.name.as_str())
-                .join(spec.version.to_string())
-        })
-    }
-
-    pub fn download_package(spec: &PackageSpec) -> Result<HashMap<String, Vec<u8>>, PackageError> {
-        if let Some(dir) = package_dir(spec)
-            && dir.exists()
-        {
-            return read_package_dir(&dir);
-        }
-
-        let url = format!(
-            "https://packages.typst.org/preview/{}-{}.tar.gz",
-            spec.name, spec.version
-        );
-
-        let compressed = ureq::get(&url)
-            .call()
-            .map_err(|e| PackageError::NetworkFailed(Some(eco_format!("{e}"))))?
-            .into_body()
-            .read_to_vec()
-            .map_err(|e| PackageError::NetworkFailed(Some(eco_format!("{e}"))))?;
-
-        let decoder = GzDecoder::new(&compressed[..]);
-        let mut archive = Archive::new(decoder);
-        let mut files = HashMap::new();
-
-        let cache_path = package_dir(spec);
-        if let Some(ref path) = cache_path {
-            let _ = std::fs::create_dir_all(path);
-        }
-
-        for entry in archive
-            .entries()
-            .map_err(|e| PackageError::MalformedArchive(Some(eco_format!("{e}"))))?
-        {
-            let mut entry =
-                entry.map_err(|e| PackageError::MalformedArchive(Some(eco_format!("{e}"))))?;
-
-            let path = entry
-                .path()
-                .map_err(|e| PackageError::MalformedArchive(Some(eco_format!("{e}"))))?
-                .into_owned();
-
-            if entry.header().entry_type().is_file() {
-                let path_str = format!("/{}", path.to_string_lossy());
-                let mut content = Vec::new();
-                entry
-                    .read_to_end(&mut content)
-                    .map_err(|e| PackageError::MalformedArchive(Some(eco_format!("{e}"))))?;
-
-                if let Some(ref cache) = cache_path {
-                    let file_path = cache.join(&path);
-                    if let Some(parent) = file_path.parent() {
-                        let _ = std::fs::create_dir_all(parent);
-                    }
-                    let _ = std::fs::write(&file_path, &content);
-                }
-
-                files.insert(path_str, content);
-            }
-        }
-
-        Ok(files)
-    }
-
-    fn read_package_dir(dir: &PathBuf) -> Result<HashMap<String, Vec<u8>>, PackageError> {
-        let mut files = HashMap::new();
-        read_dir_recursive(dir, dir, &mut files)?;
-        Ok(files)
-    }
-
-    fn read_dir_recursive(
-        base: &PathBuf,
-        current: &PathBuf,
-        files: &mut HashMap<String, Vec<u8>>,
-    ) -> Result<(), PackageError> {
-        for entry in
-            std::fs::read_dir(current).map_err(|e| PackageError::Other(Some(eco_format!("{e}"))))?
-        {
-            let entry = entry.map_err(|e| PackageError::Other(Some(eco_format!("{e}"))))?;
-            let path = entry.path();
-
-            if path.is_dir() {
-                read_dir_recursive(base, &path, files)?;
-            } else {
-                let relative = path.strip_prefix(base).unwrap();
-                let key = format!("/{}", relative.to_string_lossy());
-                let content = std::fs::read(&path)
-                    .map_err(|e| PackageError::Other(Some(eco_format!("{e}"))))?;
-                files.insert(key, content);
-            }
-        }
-        Ok(())
-    }
-}
 
 /// The compilation world that provides all resources to the Typst compiler.
 struct CompileWorld {
@@ -274,9 +140,7 @@ struct CompileWorld {
     fonts: Vec<Font>,
     main: Source,
     files: HashMap<String, Bytes>,
-    packages: Arc<RwLock<HashMap<PackageSpec, HashMap<String, Bytes>>>>,
-    #[cfg(feature = "download-packages")]
-    allow_downloads: bool,
+    packages: HashMap<PackageSpec, HashMap<String, Bytes>>,
 }
 
 impl CompileWorld {
@@ -317,48 +181,16 @@ impl CompileWorld {
             fonts,
             main,
             files,
-            packages: Arc::new(RwLock::new(packages)),
-            #[cfg(feature = "download-packages")]
-            allow_downloads: true,
+            packages,
         }
     }
 
-    /// Configures whether automatic package downloads are allowed.
-    #[cfg(feature = "download-packages")]
-    #[allow(dead_code)]
-    fn with_downloads(mut self, allow: bool) -> Self {
-        self.allow_downloads = allow;
-        self
-    }
-
-    /// Retrieves a file from a package, downloading if necessary and allowed.
+    /// Retrieves a file from a package.
     fn get_package_file(&self, package: &PackageSpec, path: &str) -> FileResult<Bytes> {
+        if let Some(pkg_files) = self.packages.get(package)
+            && let Some(content) = pkg_files.get(path)
         {
-            let packages = self.packages.read().unwrap();
-            if let Some(pkg_files) = packages.get(package)
-                && let Some(content) = pkg_files.get(path)
-            {
-                return Ok(content.clone());
-            }
-        }
-
-        #[cfg(feature = "download-packages")]
-        if self.allow_downloads {
-            let downloaded = downloader::download_package(package).map_err(FileError::Package)?;
-
-            let result = downloaded
-                .get(path)
-                .map(|c| Bytes::new(c.clone()))
-                .ok_or_else(|| FileError::NotFound(path.into()));
-
-            let mut packages = self.packages.write().unwrap();
-            let converted: HashMap<String, Bytes> = downloaded
-                .into_iter()
-                .map(|(p, c)| (p, Bytes::new(c)))
-                .collect();
-            packages.insert(package.clone(), converted);
-
-            return result;
+            return Ok(content.clone());
         }
 
         Err(FileError::Package(PackageError::NotFound(package.clone())))
@@ -462,23 +294,20 @@ fn compile(source: &str, options: &CompileOptions) -> Result<String, CompileErro
 ///
 /// # Example
 ///
-/// ```rust,ignore
+/// ```rust
 /// use dioxus::prelude::*;
-/// use dioxus_typst::{Typst, CompileOptions};
+/// use dioxus_typst::Typst;
 ///
 /// #[component]
-/// fn Document() -> Element {
-///     let source = r#"
-/// = Introduction
+/// fn App() -> Element {
+///     let content = r#"
+/// = Hello, Typst!
 ///
-/// This is a *Typst* document with inline math: $integral_0^1 x^2 dif x$
+/// Some *formatted* text with math: $E = m c^2$
 /// "#;
 ///
 ///     rsx! {
-///         Typst {
-///             source: source.to_string(),
-///             class: "prose".to_string(),
-///         }
+///         Typst { source: content.to_string() }
 ///     }
 /// }
 /// ```
@@ -507,4 +336,3 @@ pub fn Typst(
         },
     }
 }
-

@@ -11,12 +11,5 @@ categories = ["text-processing", "web-programming"]
 [dependencies]
 chrono = "0.4"
 dioxus = "0.7"
-dirs = { version = "6.0", optional = true }
-flate2 = { version = "1", optional = true }
-tar = { version = "0.4", optional = true }
 typst = "0.14"
 typst-html = "0.14"
-ureq = { version = "3.1", optional = true }
-
-[features]
-download-packages = ["dirs", "flate2", "tar", "ureq"]
