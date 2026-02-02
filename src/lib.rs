@@ -56,6 +56,8 @@ fn normalize_path(path: String) -> String {
 /// ```rust
 /// use dioxus_typst::CompileOptions;
 ///
+/// # let csv_bytes: Vec<u8> = vec![];
+/// # let image_bytes: Vec<u8> = vec![];
 /// let options = CompileOptions::new()
 ///     .with_file("data.csv", csv_bytes)
 ///     .with_file("logo.png", image_bytes);
@@ -79,6 +81,10 @@ impl CompileOptions {
     /// # Example
     ///
     /// ```rust
+    /// use dioxus_typst::CompileOptions;
+    ///
+    /// # let png_bytes: Vec<u8> = vec![];
+    /// # let csv_bytes: Vec<u8> = vec![];
     /// let options = CompileOptions::new()
     ///     .with_file("figure.png", png_bytes)
     ///     .with_file("data.csv", csv_bytes);
@@ -96,7 +102,9 @@ impl CompileOptions {
     /// ```rust
     /// use typst::syntax::package::PackageSpec;
     /// use std::str::FromStr;
+    /// use dioxus_typst::CompileOptions;
     ///
+    /// # let mut package_files = std::collections::HashMap::new();
     /// let options = CompileOptions::new()
     ///     .with_package(
     ///         PackageSpec::from_str("@preview/cetz:0.2.2").unwrap(),
