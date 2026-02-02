@@ -10,18 +10,15 @@ A Dioxus component for rendering Typst documents as HTML.
 use dioxus::prelude::*;
 use dioxus_typst::Typst;
 
-#[component]
-fn BlogPost() -> Element {
-    let content = r#"
-= My Post
+let content = r#"
+= Header
 
 Some *typst* content with `code` and math: $E = m c^2$
 "#;
 
-    rsx! {
-        article {
-            Typst { source: content.to_string() }
-        }
+rsx! {
+    article {
+        Typst { source: content.to_string() }
     }
 }
 ```
@@ -33,9 +30,15 @@ Provide images, bibliographies, or other files via `CompileOptions`:
 ```rust
 use dioxus_typst::{Typst, CompileOptions};
 
+let bib_bytes = std::fs::read("path/to/refs.bib").unwrap();
+let image_bytes = std::fs::read("path/to/figure.png").unwrap();
+let content = r#"
+#image(figure.png)
+#bibliography(refs.bib)
+"#;
 let options = CompileOptions::new()
-    .with_file("/refs.bib", bib_bytes)
-    .with_file("/figure.png", image_bytes);
+    .with_file("refs.bib", bib_bytes)
+    .with_file("figure.png", image_bytes);
 
 rsx! {
     Typst {
@@ -45,26 +48,23 @@ rsx! {
 }
 ```
 
-### Custom Class
-
-The component wraps output in `<div class="typst-content">` by default:
-
-```rust
-rsx! {
-    Typst {
-        source: content,
-        class: "my-custom-class".to_string(),
-    }
-}
-```
-
 ### With Packages
 
 ```rust
+use dioxus_typst::{Typst, CompileOptions, PackageSpec};
+
+let content = r#"
+#import "@preview/cetz:0.4.2"
+
+#cetz.canvas({
+  import cetz.draw: *
+  // Your drawing code goes here
+})
+"#
 let options = CompileOptions::new()
     .with_package(
-        PackageSpec::from_str("@preview/cetz:0.2.2").unwrap(),
-        package_files, // HashMap<String, Vec<u8>>
+        PackageSpec::from_str("@preview/cetz:0.4.2").unwrap(),
+        package_files,
     );
 
 rsx! {
@@ -74,37 +74,3 @@ rsx! {
     }
 }
 ```
-
-## Styling
-
-Typst outputs semantic HTML without CSS. Style with your own:
-
-```css
-.typst-content h1 {
-  font-size: 1.75rem;
-}
-.typst-content h2 {
-  font-size: 1.5rem;
-}
-.typst-content p {
-  margin: 0.75rem 0;
-}
-.typst-content pre {
-  padding: 1rem;
-  background: var(--surface);
-  border-radius: 4px;
-  overflow-x: auto;
-}
-```
-
-## Feature Flags
-
-| Feature             | Default | Description                                   |
-| ------------------- | ------- | --------------------------------------------- |
-| `download-packages` | ✕       | Automatically download missing Typst packages |
-
-## Limitations
-
-- Typst HTML export is experimental and may change
-- No automatic CSS generation from Typst styles
-- External files must be provided via `CompileOptions`
